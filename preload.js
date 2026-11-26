@@ -37,5 +37,6 @@ contextBridge.exposeInMainWorld('aki', {
     openWithMpv: (url) => ipcRenderer.invoke('player:openWithMpv', url),
     mpvAvailable: () => ipcRenderer.invoke('player:mpvAvailable')
   },
-  onDownloadUpdate: (cb) => ipcRenderer.on('download:update', (_, data) => cb(data))
+  onDownloadUpdate: (cb) => ipcRenderer.on('download:update', (_, data) => cb(data)),
+  onSwipe: (cb) => ipcRenderer.on('gesture:swipe', (_, dir) => cb(dir))
 });

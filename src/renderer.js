@@ -21,6 +21,7 @@ function isUrl(str) {
 function normalizeUrl(str) {
   str = str.trim();
   if (!str) return 'https://duckduckgo.com';
+  if (/^(about|data|chrome|file):/i.test(str)) return str;
   if (isUrl(str) && !str.includes(' ')) {
     if (!/^https?:\/\//i.test(str)) str = 'https://' + str;
     return str;
@@ -498,7 +499,8 @@ const commands = [
   { label: 'Abrir VPN', hint: '', run: () => togglePanel('vpn') },
   { label: 'Downloads', hint: 'Ctrl+D', run: () => togglePanel('downloads') },
   { label: 'Configurações', hint: '', run: () => togglePanel('settings') },
-  { label: 'Limpar dados', hint: '', run: async () => { if (confirm('Limpar todos os dados?')) { await window.aki.privacy.clearData(); setStatus('Dados limpos'); } } },
+  { label: 'Limpar cache rápido', hint: 'Ctrl+Shift+Del', run: async () => { await window.aki.privacy.clearData(); setStatus('Cache limpo'); } },
+  { label: 'Sobre', hint: '', run: () => { $('#about-overlay').classList.remove('hidden'); } },
   { label: 'Abrir favoritos', hint: '', run: () => togglePanel('favorites') },
   { label: 'Abrir histórico', hint: '', run: () => togglePanel('history') },
   { label: 'Página inicial', hint: '', run: async () => { const h = await window.aki.store.get('general.home', 'https://duckduckgo.com'); navigate(h); } },
@@ -609,6 +611,8 @@ async function init() {
 
   // reader
   $('#reader-close').onclick = exitReaderMode;
+  const aboutClose = $('#about-close');
+  if (aboutClose) aboutClose.onclick = () => $('#about-overlay').classList.add('hidden');
 
   // keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -619,6 +623,7 @@ async function init() {
       else if (e.key === 'l') { e.preventDefault(); $('#url-input').focus(); $('#url-input').select(); }
       else if (e.key === 'r') { e.preventDefault(); const wv = activeWv(); if (wv) wv.reload(); }
       else if (e.key === 'd') { e.preventDefault(); togglePanel('downloads'); }
+      else if (e.key === 'Delete' && e.shiftKey) { e.preventDefault(); window.aki.privacy.clearData().then(() => setStatus('Cache limpo')); }
     }
     if (e.key === 'Escape') {
       if (!$('#cmdpalette').classList.contains('hidden')) closeCmdPalette();
@@ -642,8 +647,13 @@ async function init() {
   // save session on close
   window.addEventListener('beforeunload', () => { saveSession(); });
 
-  // vpn status poll
-  updateVpnStatus();
+  // swipe gestures
+  window.aki.onSwipe((dir) => {
+    const wv = activeWv();
+    if (!wv) return;
+    if (dir === 'left') { if (wv.canGoForward()) wv.goForward(); }
+    else if (dir === 'right') { if (wv.canGoBack()) wv.goBack(); }
+  });
   setInterval(updateVpnStatus, 15000);
 
 }

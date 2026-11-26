@@ -187,6 +187,10 @@ function createWindow() {
   setupAdblock(sess);
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
+  mainWindow.webContents.on('swipe', (e, direction) => {
+    if (mainWindow) mainWindow.webContents.send('gesture:swipe', direction);
+  });
+
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
@@ -276,7 +280,18 @@ app.on('web-contents-created', (_, contents) => {
     };
     send('started');
     item.on('updated', () => send(item.isPaused() ? 'paused' : 'progress'));
-    item.on('done', (_, state) => { send(state); downloads.delete(id); });
+    item.on('done', (_, state) => { 
+      send(state); 
+      if (state === 'completed') {
+        try {
+          const { Notification } = require('electron');
+          if (Notification.isSupported()) {
+            new Notification({ title: 'Download concluído', body: item.getFilename() }).show();
+          }
+        } catch(e){}
+      }
+      downloads.delete(id); 
+    });
   });
 });
 

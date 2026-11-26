@@ -6,6 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux"
@@ -18,6 +20,7 @@
     "webtorrent": "^3.0.21"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   },
@@ -38,13 +41,22 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "${env.APPLE_TEAM_ID}"
+      }
     },
     "win": {
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "certificateFile": "${env.WIN_CSC_LINK}",
+      "certificatePassword": "${env.WIN_CSC_KEY_PASSWORD}"
     },
     "linux": {
       "target": [
