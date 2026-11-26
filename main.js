@@ -195,8 +195,15 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
-  mainWindow.webContents.on('console-message', (e, level, message, line, sourceId) => {
-    console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+  mainWindow.webContents.on('crashed', () => {
+    console.error('Renderer crashed, reloading...');
+    if (mainWindow) mainWindow.reload();
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('Renderer unresponsive');
+  });
+  mainWindow.webContents.on('responsive', () => {
+    console.log('Renderer responsive again');
   });
 
   mainWindow.on('close', () => {
@@ -269,6 +276,10 @@ ipcMain.handle('vpn:selectProfile', async () => {
 // Downloads
 app.on('web-contents-created', (_, contents) => {
   injectFingerprintProtection(contents);
+  contents.on('crashed', () => {
+    console.error('Webview crashed, attempting reload');
+    try { contents.reload(); } catch {}
+  });
   contents.session.on('will-download', (event, item) => {
     const savePath = store.get('downloads.folder') || app.getPath('downloads');
     const filePath = path.join(savePath, item.getFilename());

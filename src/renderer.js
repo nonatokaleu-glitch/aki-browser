@@ -1,5 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
+window.addEventListener('error', (e) => { console.error('Renderer error:', e.message, e.filename, e.lineno); });
+window.addEventListener('unhandledrejection', (e) => { console.error('Unhandled rejection:', e.reason); });
 
 const state = {
   tabs: [],          // { id, webview, title, url, incognito }
