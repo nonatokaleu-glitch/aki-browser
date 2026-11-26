@@ -46,7 +46,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": "-"
+      "identity": null
     },
     "win": {
       "target": [
@@ -61,7 +61,8 @@
         "AppImage",
         "deb"
       ]
-    }
+    },
+    "afterPack": "scripts/afterPack.js"
   },
   "allowScripts": {
     "electron@33.4.11": true,
