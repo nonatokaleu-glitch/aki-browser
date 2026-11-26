@@ -286,7 +286,10 @@ async function renderSettingsPanel(p) {
     <div class="setting"><label>Bloqueio de anúncios/rastreadores <div class="toggle ${adblock?'on':''}" data-key="privacy.adblock"></div></label></div>
     <div class="setting"><label>Proteção contra fingerprinting <div class="toggle ${fingerprint?'on':''}" data-key="privacy.fingerprint"></div></label></div>
     <div class="setting"><label>Limpar dados ao fechar <div class="toggle ${clearOnClose?'on':''}" data-key="privacy.clearOnClose"></div></label></div>
-    <div class="section-title">Geral</div>
+    <div class="section-title">Aparência</div>
+  <div class="setting"><label>Tema atual <span id="theme-label">${await window.aki.store.get('general.theme','dark')}</span></label></div>
+  <button class="btn secondary" id="theme-cycle" style="margin-bottom:10px;">Alternar tema</button>
+  <div class="section-title">Geral</div>
     <div class="setting"><label>Página inicial</label><input id="home-input" value="${escapeHtml(home)}" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--fg);padding:6px;border-radius:6px;" /></div>
     <button class="btn" id="save-home" style="margin-top:6px;">Salvar</button>
     <div class="section-title">Dados</div>
@@ -304,6 +307,7 @@ async function renderSettingsPanel(p) {
     };
   });
   $('#save-home').onclick = async () => { await window.aki.store.set('general.home', $('#home-input').value); setStatus('Home salva'); };
+  $('#theme-cycle').onclick = async () => { await toggleTheme(); $('#theme-label').textContent = await window.aki.store.get('general.theme','dark'); };
   $('#clear-data').onclick = async () => { if (confirm('Limpar todos os dados (cookies, cache, histórico)?')) { await window.aki.privacy.clearData(); setStatus('Dados limpos'); } };
   $('#open-player').onclick = () => openPlayer();
 }
