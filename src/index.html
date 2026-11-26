@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Aki Browser</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="titlebar">
+    <div class="traffic"></div>
+    <div class="appname">Aki Browser</div>
+  </div>
+
+  <div id="toolbar">
+    <button id="btn-back" title="Voltar (Alt+←)">◀</button>
+    <button id="btn-fwd" title="Avançar (Alt+→)">▶</button>
+    <button id="btn-reload" title="Recarregar (Ctrl+R)">⟳</button>
+    <button id="btn-home" title="Home">⌂</button>
+    <div id="addressbar">
+      <span id="lock-icon">🔒</span>
+      <input id="url-input" type="text" placeholder="Pesquisar ou digitar URL" spellcheck="false" />
+      <button id="btn-go">→</button>
+    </div>
+    <button id="btn-star" title="Favoritar">★</button>
+    <button id="btn-reader" title="Modo leitura">📖</button>
+    <button id="btn-theme" title="Tema">◐</button>
+    <button id="btn-incognito" title="Modo privado">🕵</button>
+    <button id="btn-vpn" title="VPN">🛡</button>
+    <button id="btn-downloads" title="Downloads">⬇</button>
+    <button id="btn-menu" title="Menu">☰</button>
+  </div>
+
+  <div id="tabsbar">
+    <div id="tabs"></div>
+    <button id="btn-newtab" title="Nova aba (Ctrl+T)">+</button>
+  </div>
+
+  <div id="content">
+    <div id="webviews"></div>
+    <div id="sidepanel" class="hidden"></div>
+  </div>
+
+  <div id="statusbar">
+    <span id="status-text">Pronto</span>
+    <span id="vpn-status">VPN: desconectada</span>
+  </div>
+
+  <!-- Video player overlay -->
+  <div id="player-overlay" class="hidden">
+    <div id="player-header">
+      <span>Reprodutor Aki</span>
+      <button id="player-close">✕</button>
+    </div>
+    <video id="player-video" controls></video>
+    <div id="player-controls">
+      <button data-speed="0.5">0.5x</button>
+      <button data-speed="1">1x</button>
+      <button data-speed="1.5">1.5x</button>
+      <button data-speed="2">2x</button>
+      <button id="player-pip">PiP</button>
+      <button id="player-fullscreen">Tela cheia</button>
+      <input type="file" id="player-subtitle" accept=".vtt,.srt" hidden />
+      <button id="player-loadsub">Legenda</button>
+      <button id="player-mpv">Abrir com mpv</button>
+    </div>
+  </div>
+
+  <!-- Command palette -->
+  <div id="cmdpalette" class="hidden">
+    <div id="cmdpalette-box">
+      <input id="cmdpalette-input" type="text" placeholder="Digite um comando ou pesquise..." />
+      <div id="cmdpalette-list"></div>
+    </div>
+  </div>
+
+  <!-- Reader mode overlay -->
+  <div id="reader-overlay" class="hidden">
+    <div id="reader-header">
+      <span id="reader-title">Modo leitura</span>
+      <button id="reader-close">✕ Fechar</button>
+    </div>
+    <div id="reader-content"></div>
+  </div>
+</body>
+</html>

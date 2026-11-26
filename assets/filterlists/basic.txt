@@ -1,0 +1,17 @@
+! Aki Browser - basic ad/tracker list
+doubleclick.net
+googlesyndication.com
+googleadservices.com
+googletagmanager.com
+google-analytics.com
+facebook.com/tr
+analytics.google.com
+scorecardresearch.com
+outbrain.com
+taboola.com
+amazon-adsystem.com
+adnxs.com
+pubmatic.com
+rubiconproject.com
+criteo.com
+quantserve.com

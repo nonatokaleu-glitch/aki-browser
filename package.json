@@ -1,0 +1,64 @@
+{
+  "name": "aki-browser",
+  "version": "0.1.0",
+  "description": "Aki Browser - navegador pessoal multiplataforma (Brave + Aloha)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "author": "nonatokaleu",
+  "license": "MIT",
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.8.11",
+    "webtorrent": "^3.0.21"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.aki.browser",
+    "productName": "Aki Browser",
+    "icon": "assets/icon.png",
+    "publish": {
+      "provider": "github",
+      "owner": "nonatokaleu-glitch",
+      "repo": "aki-browser"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "utp-native@2.5.3": true,
+    "ip-set@3.0.0": true,
+    "bufferutil@4.2.0": true,
+    "utf-8-validate@6.1.0": true,
+    "node-datachannel@0.32.3": true
+  }
+}
