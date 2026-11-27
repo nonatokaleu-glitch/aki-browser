@@ -243,6 +243,28 @@ function createTray() {
   tray.on('click', () => { if (mainWindow) { mainWindow.isVisible() ? mainWindow.hide() : (mainWindow.show(), mainWindow.focus()); } });
 }
 
+function setupAutoUpdate() {
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = false;
+    autoUpdater.on('update-available', (info) => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info', title: 'Atualização disponível',
+        message: `Nova versão ${info.version} disponível. Baixar agora?`,
+        buttons: ['Sim', 'Não']
+      }).then(({ response }) => { if (response === 0) autoUpdater.downloadUpdate(); });
+    });
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info', title: 'Atualização pronta',
+        message: 'Atualização baixada. Reiniciar para aplicar?',
+        buttons: ['Reiniciar', 'Depois']
+      }).then(({ response }) => { if (response === 0) autoUpdater.quitAndInstall(); });
+    });
+    if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
+  } catch (e) { console.log('auto-update skip:', e.message); }
+}
+
 app.whenReady().then(() => {
   loadAdblockLists();
   setupAdblock(session.defaultSession);

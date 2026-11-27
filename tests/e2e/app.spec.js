@@ -52,8 +52,9 @@ test.describe('Aki Browser E2E', () => {
   test('navega para URL', async () => {
     await resetUI();
     await window.fill('#url-input', 'about:blank');
+    await window.waitForTimeout(300);
     await window.click('#btn-go');
-    await window.waitForTimeout(1000);
+    await window.waitForTimeout(1500);
     const url = await window.inputValue('#url-input');
     expect(url).toContain('about:blank');
   });
