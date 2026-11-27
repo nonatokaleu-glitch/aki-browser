@@ -20,7 +20,12 @@ contextBridge.exposeInMainWorld('aki', {
     status: () => ipcRenderer.invoke('vpn:status'),
     connect: (p) => ipcRenderer.invoke('vpn:connect', p),
     disconnect: () => ipcRenderer.invoke('vpn:disconnect'),
-    selectProfile: () => ipcRenderer.invoke('vpn:selectProfile')
+    selectProfile: () => ipcRenderer.invoke('vpn:selectProfile'),
+    profiles: () => ipcRenderer.invoke('vpn:profiles'),
+    removeProfile: (p) => ipcRenderer.invoke('vpn:removeProfile', p),
+    setAutoConnect: (v) => ipcRenderer.invoke('vpn:setAutoConnect', v),
+    setKillSwitch: (v) => ipcRenderer.invoke('vpn:setKillSwitch', v),
+    getSettings: () => ipcRenderer.invoke('vpn:getSettings')
   },
   download: {
     pause: (id) => ipcRenderer.invoke('download:pause', id),
@@ -37,5 +42,6 @@ contextBridge.exposeInMainWorld('aki', {
     mpvAvailable: () => ipcRenderer.invoke('player:mpvAvailable')
   },
   onDownloadUpdate: (cb) => ipcRenderer.on('download:update', (_, data) => cb(data)),
+  onVpnStatusUpdate: (cb) => ipcRenderer.on('vpn:statusUpdate', (_, data) => cb(data)),
   onSwipe: (cb) => ipcRenderer.on('gesture:swipe', (_, dir) => cb(dir))
 });

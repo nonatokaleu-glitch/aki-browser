@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, shell, dialog, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog, systemPreferences, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
@@ -91,28 +91,24 @@ function injectFingerprintProtection(contents) {
 }
 
 // ---------- VPN ----------
+let vpnMonitor = null;
+
+function vpnProfiles() { return store.get('vpn.profiles', []); }
+function vpnSaveProfiles(profiles) { store.set('vpn.profiles', profiles); }
+
 function vpnStatus() {
   return new Promise((resolve) => {
-    // Try WireGuard
     exec('wg show 2>/dev/null', (err, stdout) => {
       if (!err && stdout.trim()) {
         const iface = stdout.split('\n')[0].replace('interface:','').trim();
-        // get ip
-        exec('curl -s --max-time 5 https://api.ipify.org', (e, ip) => {
-          vpnState = { connected: true, iface, ip: ip.trim() || null, engine: 'wireguard' };
-          resolve(vpnState);
-        });
+        checkVpnIp('wireguard', iface, resolve);
         return;
       }
-      // Try openvpn process
       exec('pgrep -x openvpn', (e2) => {
         if (!e2) {
-          exec('curl -s --max-time 5 https://api.ipify.org', (e3, ip) => {
-            vpnState = { connected: true, iface: 'openvpn', ip: ip.trim() || null, engine: 'openvpn' };
-            resolve(vpnState);
-          });
+          checkVpnIp('openvpn', 'openvpn', resolve);
         } else {
-          vpnState = { connected: false, iface: null, ip: null, engine: null };
+          vpnState = { connected: false, iface: null, ip: null, engine: null, latency: null };
           resolve(vpnState);
         }
       });
@@ -120,15 +116,28 @@ function vpnStatus() {
   });
 }
 
+function checkVpnIp(engine, iface, resolve) {
+  const start = Date.now();
+  exec('curl -s --max-time 5 https://api.ipify.org', (e3, ip) => {
+    const latency = Date.now() - start;
+    vpnState = { connected: true, iface, ip: ip.trim() || null, engine, latency };
+    resolve(vpnState);
+  });
+}
+
 function vpnConnect(profilePath) {
   return new Promise((resolve) => {
-    if (!profilePath) return resolve({ ok: false, error: 'Perfil não selecionado' });
+    if (!profilePath) return resolve({ ok: false, error: 'Perfil nao selecionado' });
     const cmd = profilePath.endsWith('.conf')
       ? `wg-quick up "${profilePath}"`
       : `openvpn --config "${profilePath}" --daemon`;
     exec(cmd, (err, stdout, stderr) => {
       if (err) resolve({ ok: false, error: stderr || err.message });
-      else resolve({ ok: true });
+      else {
+        store.set('vpn.lastProfile', profilePath);
+        startVpnMonitor();
+        resolve({ ok: true });
+      }
     });
   });
 }
@@ -136,36 +145,35 @@ function vpnConnect(profilePath) {
 function vpnDisconnect() {
   return new Promise((resolve) => {
     exec('wg-quick down all 2>/dev/null; pkill -x openvpn 2>/dev/null', () => {
-      vpnState = { connected: false, iface: null, ip: null, engine: null };
+      vpnState = { connected: false, iface: null, ip: null, engine: null, latency: null };
+      stopVpnMonitor();
       resolve({ ok: true });
     });
   });
 }
 
-// ---------- Auto-update ----------
-function setupAutoUpdate() {
-  try {
-    const { autoUpdater } = require('electron-updater');
-    autoUpdater.autoDownload = false;
-    autoUpdater.on('update-available', (info) => {
-      const { dialog } = require('electron');
-      dialog.showMessageBox(mainWindow, {
-        type: 'info', title: 'Atualização disponível',
-        message: `Nova versão ${info.version} disponível. Baixar agora?`,
-        buttons: ['Sim', 'Não']
-      }).then(({ response }) => { if (response === 0) autoUpdater.downloadUpdate(); });
-    });
-    autoUpdater.on('update-downloaded', () => {
-      const { dialog } = require('electron');
-      dialog.showMessageBox(mainWindow, {
-        type: 'info', title: 'Atualização pronta',
-        message: 'Atualização baixada. Reiniciar para aplicar?',
-        buttons: ['Reiniciar', 'Depois']
-      }).then(({ response }) => { if (response === 0) autoUpdater.quitAndInstall(); });
-    });
-    if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
-  } catch (e) { console.log('auto-update skip:', e.message); }
+function startVpnMonitor() {
+  stopVpnMonitor();
+  vpnMonitor = setInterval(async () => {
+    const s = await vpnStatus();
+    if (mainWindow) mainWindow.webContents.send('vpn:statusUpdate', s);
+    if (!s.connected && store.get('vpn.killSwitch', false) && store.get('vpn.lastProfile')) {
+      exec('networksetup -setdnsservers Wi-Fi 127.0.0.1 2>/dev/null');
+    }
+  }, 10000);
 }
+
+function stopVpnMonitor() {
+  if (vpnMonitor) { clearInterval(vpnMonitor); vpnMonitor = null; }
+  exec('networksetup -setdnsservers Wi-Fi Empty 2>/dev/null');
+}
+
+function vpnAutoConnect() {
+  if (!store.get('vpn.autoConnect', false)) return;
+  const profile = store.get('vpn.lastProfile');
+  if (profile) vpnConnect(profile).then(() => startVpnMonitor());
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -216,6 +224,25 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+let tray = null;
+function createTray() {
+  const icon = nativeImage.createEmpty();
+  tray = new Tray(icon);
+  tray.setToolTip('Aki Browser - VPN');
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Aki Browser', enabled: false },
+    { type: 'separator' },
+    { label: 'VPN: Desconectada', id: 'vpn-status', enabled: false },
+    { label: 'Conectar VPN', click: () => { const p = store.get('vpn.lastProfile'); if (p) vpnConnect(p).then(() => { if (mainWindow) mainWindow.webContents.send('vpn:statusUpdate', vpnState); }); } },
+    { label: 'Desconectar VPN', click: () => { vpnDisconnect().then(() => { if (mainWindow) mainWindow.webContents.send('vpn:statusUpdate', vpnState); }); } },
+    { type: 'separator' },
+    { label: 'Mostrar janela', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+    { label: 'Sair', click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => { if (mainWindow) { mainWindow.isVisible() ? mainWindow.hide() : (mainWindow.show(), mainWindow.focus()); } });
+}
+
 app.whenReady().then(() => {
   loadAdblockLists();
   setupAdblock(session.defaultSession);
@@ -224,6 +251,8 @@ app.whenReady().then(() => {
   // persist:aki
   setupAdblock(session.fromPartition('persist:aki'));
   createWindow();
+  createTray();
+  vpnAutoConnect();
   setupAutoUpdate();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
@@ -269,56 +298,26 @@ ipcMain.handle('vpn:selectProfile', async () => {
     properties: ['openFile']
   });
   if (r.canceled || !r.filePaths.length) return null;
-  store.set('vpn.profile', r.filePaths[0]);
-  return r.filePaths[0];
+  const profilePath = r.filePaths[0];
+  const name = path.basename(profilePath);
+  const profiles = vpnProfiles();
+  if (!profiles.find(p => p.path === profilePath)) {
+    profiles.push({ name, path: profilePath, added: Date.now() });
+    vpnSaveProfiles(profiles);
+  }
+  store.set('vpn.lastProfile', profilePath);
+  return profilePath;
 });
-
-// Downloads
-app.on('web-contents-created', (_, contents) => {
-  injectFingerprintProtection(contents);
-  contents.on('crashed', () => {
-    console.error('Webview crashed, attempting reload');
-    try { contents.reload(); } catch {}
-  });
-  contents.session.on('will-download', (event, item) => {
-    const savePath = store.get('downloads.folder') || app.getPath('downloads');
-    const filePath = path.join(savePath, item.getFilename());
-    item.setSavePath(filePath);
-    const id = Date.now().toString();
-    downloads.set(id, { item, filename: item.getFilename(), path: filePath, total: item.getTotalBytes() });
-    const send = (state) => {
-      if (mainWindow) mainWindow.webContents.send('download:update', { id, filename: item.getFilename(), state, received: item.getReceivedBytes(), total: item.getTotalBytes(), path: filePath });
-    };
-    send('started');
-    item.on('updated', () => send(item.isPaused() ? 'paused' : 'progress'));
-    item.on('done', (_, state) => { 
-      send(state); 
-      if (state === 'completed') {
-        try {
-          const { Notification } = require('electron');
-          if (Notification.isSupported()) {
-            new Notification({ title: 'Download concluído', body: item.getFilename() }).show();
-          }
-        } catch(e){}
-      }
-      downloads.delete(id); 
-    });
-  });
+ipcMain.handle('vpn:profiles', () => vpnProfiles());
+ipcMain.handle('vpn:removeProfile', (_, profilePath) => {
+  const profiles = vpnProfiles().filter(p => p.path !== profilePath);
+  vpnSaveProfiles(profiles);
+  if (store.get('vpn.lastProfile') === profilePath) store.delete('vpn.lastProfile');
+  return true;
 });
-
-ipcMain.handle('download:pause', (_, id) => { const d = downloads.get(id); if (d) d.item.pause(); });
-ipcMain.handle('download:resume', (_, id) => { const d = downloads.get(id); if (d) d.item.resume(); });
-ipcMain.handle('download:cancel', (_, id) => { const d = downloads.get(id); if (d) d.item.cancel(); });
-ipcMain.handle('download:openFolder', () => {
-  const p = store.get('downloads.folder') || app.getPath('downloads');
-  shell.openPath(p);
-});
-ipcMain.handle('download:selectFolder', async () => {
-  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
-  if (r.canceled || !r.filePaths.length) return null;
-  store.set('downloads.folder', r.filePaths[0]);
-  return r.filePaths[0];
-});
+ipcMain.handle('vpn:setAutoConnect', (_, val) => { store.set('vpn.autoConnect', val); return true; });
+ipcMain.handle('vpn:setKillSwitch', (_, val) => { store.set('vpn.killSwitch', val); if (!val) exec('networksetup -setdnsservers Wi-Fi Empty 2>/dev/null'); return true; });
+ipcMain.handle('vpn:getSettings', () => ({ autoConnect: store.get('vpn.autoConnect', false), killSwitch: store.get('vpn.killSwitch', false) }));
 
 ipcMain.handle('page:screenshot', async (_, bounds) => {
   if (!mainWindow) return null;

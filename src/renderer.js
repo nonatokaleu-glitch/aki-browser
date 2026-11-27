@@ -250,25 +250,88 @@ window.aki.onDownloadUpdate((data) => {
 
 // VPN panel
 async function renderVpnPanel(p) {
-  const profile = await window.aki.store.get('vpn.profile', null);
+  const profile = await window.aki.store.get('vpn.lastProfile', null);
+  const settings = await window.aki.vpn.getSettings();
+  const profiles = await window.aki.vpn.profiles();
   const status = await window.aki.vpn.status();
+  const connColor = status.connected ? 'var(--ok)' : 'var(--danger)';
   p.innerHTML = `
     <div class="section-title">VPN</div>
-    <div class="setting"><label>Status <span id="vpn-st" style="color:${status.connected?'var(--ok)':'var(--danger)'}">${status.connected?'Conectada ('+status.engine+')':'Desconectada'}</span></label></div>
-    <div class="setting"><label>IP externo <span>${status.ip||'—'}</span></label></div>
-    <div class="setting"><label>Perfil <span style="font-size:11px;color:var(--fg2);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${profile||'nenhum'}</span></label></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-      <button class="btn" id="vpn-select">Selecionar perfil</button>
-      ${status.connected
-        ? `<button class="btn secondary" id="vpn-disc">Desconectar</button>`
-        : `<button class="btn" id="vpn-conn">Conectar</button>`}
+    <div class="setting"><label>Status <span style="color:${connColor}">${status.connected ? 'Conectada (' + status.engine + ')' : 'Desconectada'}</span></label></div>
+    <div class="setting"><label>IP externo <span>${status.ip || '—'}</span></label></div>
+    ${status.latency ? '<div class="setting"><label>Latência <span>' + status.latency + ' ms</span></label></div>' : ''}
+    <div class="setting"><label>Interface <span>${status.iface || '—'}</span></label></div>
+
+    <div class="section-title">Perfis</div>
+    <div id="vpn-profiles"></div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn" id="vpn-add">Adicionar perfil</button>
+      ${profile ? '<button class="btn secondary" id="vpn-conn">' + (status.connected ? 'Desconectar' : 'Conectar') + '</button>' : ''}
     </div>
-    <div style="margin-top:14px;font-size:12px;color:var(--fg2);">
-      Suporta WireGuard (.conf) e OpenVPN (.ovpn). Requer wg-quick/openvpn instalados no sistema.
+
+    <div class="section-title">Configurações</div>
+    <div class="setting"><label>Auto-connect <div class="toggle ${settings.autoConnect ? 'on' : ''}" data-vpn="auto"></div></label></div>
+    <div class="setting"><label>Kill switch <div class="toggle ${settings.killSwitch ? 'on' : ''}" data-vpn="kill"></div></label></div>
+    <div style="margin-top:10px;font-size:12px;color:var(--fg2);">
+      Kill switch bloqueia DNS se a VPN cair (best-effort).
     </div>`;
-  const sel = $('#vpn-select'); if (sel) sel.onclick = async () => { await window.aki.vpn.selectProfile(); renderVpnPanel(p); };
-  const conn = $('#vpn-conn'); if (conn) conn.onclick = async () => { if (!profile) { alert('Selecione um perfil primeiro'); return; } const r = await window.aki.vpn.connect(profile); if (!r.ok) alert(r.error); await updateVpnStatus(); renderVpnPanel(p); };
-  const disc = $('#vpn-disc'); if (disc) disc.onclick = async () => { await window.aki.vpn.disconnect(); await updateVpnStatus(); renderVpnPanel(p); };
+
+  const list = $('#vpn-profiles');
+  if (profiles.length === 0) {
+    list.innerHTML = '<div style="color:var(--fg2);font-size:12px;">Nenhum perfil. Adicione um .conf ou .ovpn.</div>';
+  } else {
+    list.innerHTML = profiles.map(pr => `
+      <div class="dl-item">
+        <div class="dl-name">${escapeHtml(pr.name)}</div>
+        <div class="dl-meta"><span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${escapeHtml(pr.path)}</span></div>
+        <div class="dl-actions">
+          <button data-path="${escapeHtml(pr.path)}" data-act="use">Usar</button>
+          <button data-path="${escapeHtml(pr.path)}" data-act="remove">Remover</button>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('button').forEach(b => {
+      b.onclick = async () => {
+        if (b.dataset.act === 'use') {
+          await window.aki.store.set('vpn.lastProfile', b.dataset.path);
+          renderVpnPanel(p);
+        } else {
+          await window.aki.vpn.removeProfile(b.dataset.path);
+          renderVpnPanel(p);
+        }
+      };
+    });
+  }
+
+  const addBtn = $('#vpn-add');
+  if (addBtn) addBtn.onclick = async () => { await window.aki.vpn.selectProfile(); renderVpnPanel(p); };
+
+  const connBtn = $('#vpn-conn');
+  if (connBtn) connBtn.onclick = async () => {
+    if (status.connected) {
+      await window.aki.vpn.disconnect();
+    } else {
+      const prof = await window.aki.store.get('vpn.lastProfile', null);
+      if (!prof) { alert('Selecione um perfil primeiro'); return; }
+      const r = await window.aki.vpn.connect(prof);
+      if (!r.ok) alert(r.error);
+    }
+    await updateVpnStatus();
+    renderVpnPanel(p);
+  };
+
+  p.querySelectorAll('.toggle[data-vpn]').forEach(t => {
+    t.onclick = async () => {
+      const key = t.dataset.vpn;
+      if (key === 'auto') {
+        const cur = settings.autoConnect;
+        await window.aki.vpn.setAutoConnect(!cur);
+      } else {
+        const cur = settings.killSwitch;
+        await window.aki.vpn.setKillSwitch(!cur);
+      }
+      renderVpnPanel(p);
+    };
+  });
 }
 
 async function updateVpnStatus() {
