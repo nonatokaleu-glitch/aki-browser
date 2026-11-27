@@ -1,0 +1,48 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Generate project (xcodegen)
+        run: |
+          brew install xcodegen
+          cd /Volumes/NK1/AkiBrowser-iOS 2>/dev/null || cd AkiBrowser-iOS
+          xcodegen generate
+
+      - name: Build for simulator
+        run: |
+          cd AkiBrowser-iOS
+          xcodebuild -project AkiBrowser.xcodeproj -scheme AkiBrowser \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            build
+
+      - name: Run tests
+        run: |
+          cd AkiBrowser-iOS
+          xcodebuild -project AkiBrowser.xcodeproj -scheme AkiBrowser \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            test
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: aki-browser-ios
+          path: AkiBrowser-iOS/build/
+          if-no-files-found: ignore
+EOF

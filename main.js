@@ -320,7 +320,16 @@ ipcMain.handle('download:selectFolder', async () => {
   return r.filePaths[0];
 });
 
-ipcMain.handle('shell:openExternal', (_, url) => shell.openExternal(url));
+ipcMain.handle('page:screenshot', async (_, bounds) => {
+  if (!mainWindow) return null;
+  const img = await mainWindow.webContents.capturePage(bounds);
+  const buf = img.toPNG();
+  const folder = store.get('downloads.folder') || app.getPath('downloads');
+  const filePath = path.join(folder, `screenshot-${Date.now()}.png`);
+  fs.writeFileSync(filePath, buf);
+  shell.showItemInFolder(filePath);
+  return filePath;
+});
 ipcMain.handle('shell:openPath', (_, p) => shell.openPath(p));
 ipcMain.handle('player:openWithMpv', (_, url) => {
   return new Promise((resolve) => {

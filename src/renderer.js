@@ -299,6 +299,12 @@ async function renderSettingsPanel(p) {
     <button class="btn secondary" id="clear-data">Limpar todos os dados</button>
     <div class="section-title">Player de vídeo</div>
     <button class="btn secondary" id="open-player">Abrir player com URL</button>
+    <div class="section-title">Atalhos de teclado</div>
+    <div style="font-size:12px;color:var(--fg2);line-height:1.8;">
+      Ctrl+T: Nova aba · Ctrl+W: Fechar aba · Ctrl+L: Focar URL<br/>
+      Ctrl+R: Recarregar · Ctrl+D: Downloads · Ctrl+K: Command palette<br/>
+      Ctrl+Shift+Del: Limpar cache · Esc: Fechar overlays
+    </div>
   `;
   p.querySelectorAll('.toggle').forEach(t => {
     t.onclick = async () => {
@@ -388,6 +394,22 @@ async function applyTheme() {
   document.body.classList.toggle('light', theme === 'light');
 }
 
+function setZoom(level) {
+  const wv = activeWv();
+  if (!wv) return;
+  wv.setZoomLevel(level);
+  const tab = state.tabs.find(t => t.id === state.activeTabId);
+  if (tab) {
+    const host = new URL(tab.url).host;
+    window.aki.store.set('zoom.' + host, level);
+  }
+}
+function changeZoom(delta) {
+  const wv = activeWv();
+  if (!wv) return;
+  setZoom(wv.getZoomLevel() + delta);
+}
+
 async function toggleTheme() {
   const cur = await window.aki.store.get('general.theme', 'dark');
   const order = ['dark', 'light', 'auto'];
@@ -439,6 +461,24 @@ function updateStarButton() {
 }
 
 // ---------- Phase 2: Sessions restore ----------
+async function saveNamedSession(name) {
+  if (!name) return;
+  const tabs = state.tabs.map(t => ({ url: t.url, incognito: t.incognito }));
+  await window.aki.store.set('sessions.' + name, tabs);
+  setStatus('Sessão "' + name + '" salva');
+}
+async function restoreNamedSession(name) {
+  const tabs = await window.aki.store.get('sessions.' + name, null);
+  if (!tabs || !tabs.length) { setStatus('Sessão não encontrada'); return; }
+  for (const t of tabs) createTab(t.url, t.incognito);
+  setStatus('Sessão "' + name + '" restaurada');
+}
+async function listSessions() {
+  // electron-store doesn't list keys easily; we track a list
+  const list = await window.aki.store.get('sessions.list', []);
+  return list;
+}
+
 async function saveSession() {
   const tabs = state.tabs.map(t => ({ url: t.url, incognito: t.incognito }));
   await window.aki.store.set('data.session', tabs);
@@ -506,6 +546,15 @@ const commands = [
   { label: 'Abrir favoritos', hint: '', run: () => togglePanel('favorites') },
   { label: 'Abrir histórico', hint: '', run: () => togglePanel('history') },
   { label: 'Página inicial', hint: '', run: async () => { const h = await window.aki.store.get('general.home', 'https://duckduckgo.com'); navigate(h); } },
+  { label: 'Capturar screenshot', hint: '', run: async () => { const p = await window.aki.page.screenshot(); if (p) setStatus('Screenshot salvo'); } },
+  { label: 'Traduzir página', hint: '', run: () => { const wv = activeWv(); if (wv) { const u = encodeURIComponent(wv.getURL()); window.aki.shell.openExternal('https://translate.google.com/translate?sl=auto&tl=pt&u=' + u); } } },
+  { label: 'Zoom in', hint: 'Ctrl+=', run: () => changeZoom(0.1) },
+  { label: 'Zoom out', hint: 'Ctrl+-', run: () => changeZoom(-0.1) },
+  { label: 'Zoom reset', hint: 'Ctrl+0', run: () => setZoom(1.0) },
+  { label: 'Salvar sessão', hint: '', run: async () => { await saveSession(); setStatus('Sessão salva'); } },
+  { label: 'Restaurar sessão', hint: '', run: async () => { const r = await restoreSession(); setStatus(r ? 'Sessão restaurada' : 'Sem sessão salva'); } },
+  { label: 'Salvar sessão nomeada', hint: '', run: async () => { const name = prompt('Nome da sessão:'); if (name) { await saveNamedSession(name); const list = await window.aki.store.get('sessions.list', []); if (!list.includes(name)) { list.push(name); await window.aki.store.set('sessions.list', list); } } } },
+  { label: 'Restaurar sessão nomeada', hint: '', run: async () => { const list = await window.aki.store.get('sessions.list', []); if (!list.length) { setStatus('Sem sessões salvas'); return; } const name = prompt('Sessão: ' + list.join(', ')); if (name && list.includes(name)) await restoreNamedSession(name); } },
 ];
 
 let cmdSelected = 0;
@@ -555,6 +604,15 @@ async function addTorrent(magnetOrPath) {
   }
 }
 
+function applyPersistedZoom(url) {
+  try {
+    const host = new URL(url).host;
+    const level = window.aki.store.get('zoom.' + host, null);
+    const wv = activeWv();
+    if (wv && level !== null) wv.setZoomLevel(level);
+  } catch {}
+}
+
 async function init() {
   await applyTheme();
   await loadFavoritesHistory();
@@ -582,6 +640,20 @@ async function init() {
   $('#player-close').onclick = closePlayer;
   $$('[data-speed]').forEach(b => b.onclick = () => { $('#player-video').playbackRate = parseFloat(b.dataset.speed); });
   $('#player-pip').onclick = async () => { try { await $('#player-video').requestPictureInPicture(); } catch {} };
+  $('#player-globalpip').onclick = async () => {
+    try {
+      if ('documentPictureInPicture' in window) {
+        const pipWindow = await window.documentPictureInPicture.requestWindow({ width: 640, height: 360 });
+        const video = $('#player-video');
+        pipWindow.document.body.append(video);
+        pipWindow.addEventListener('pagehide', () => {
+          document.querySelector('#player-video-container')?.append(video);
+        });
+      } else {
+        alert('PiP Global não suportado neste Chromium');
+      }
+    } catch (e) { alert('PiP Global falhou: ' + e.message); }
+  };
   $('#player-fullscreen').onclick = () => { const v = $('#player-video'); if (v.requestFullscreen) v.requestFullscreen(); };
   $('#player-loadsub').onclick = () => $('#player-subtitle').click();
   $('#player-mpv').onclick = async () => {
@@ -637,7 +709,7 @@ async function init() {
   // override createTab to record history on navigate
   // (hook via monkeypatch of activateTab? instead, add history in did-navigate)
   // We'll patch createTab's did-navigate by editing createTab above; do it via global hook:
-  window._onNavigate = (url, title) => { addHistory(url, title); updateStarButton(); };
+  window._onNavigate = (url, title) => { addHistory(url, title); updateStarButton(); applyPersistedZoom(url); };
 
   // first tab / restore session
   const restored = await restoreSession();

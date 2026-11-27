@@ -29,9 +29,8 @@ contextBridge.exposeInMainWorld('aki', {
     openFolder: () => ipcRenderer.invoke('download:openFolder'),
     selectFolder: () => ipcRenderer.invoke('download:selectFolder')
   },
-  shell: {
-    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
-    openPath: (p) => ipcRenderer.invoke('shell:openPath', p)
+  page: {
+    screenshot: () => ipcRenderer.invoke('page:screenshot')
   },
   player: {
     openWithMpv: (url) => ipcRenderer.invoke('player:openWithMpv', url),
