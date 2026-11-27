@@ -27,6 +27,7 @@
     <button id="btn-incognito" title="Modo privado">🕵</button>
     <button id="btn-vpn" title="VPN">🛡</button>
     <button id="btn-downloads" title="Downloads">⬇</button>
+    <button id="btn-videodl" title="Baixar vídeo">🎬</button>
     <button id="btn-menu" title="Menu">☰</button>
   </div>
 
@@ -81,6 +82,17 @@
       <button id="reader-close">✕ Fechar</button>
     </div>
     <div id="reader-content"></div>
+  </div>
+  <!-- Video download modal -->
+  <div id="videodl-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin-bottom:12px;">Baixar vídeo</h3>
+      <div id="videodl-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" id="videodl-close">Fechar</button>
+        <button class="btn" id="videodl-refresh">Detectar novamente</button>
+      </div>
+    </div>
   </div>
   <script src="renderer.js"></script>
 </body>

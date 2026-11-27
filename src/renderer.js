@@ -676,6 +676,78 @@ function applyPersistedZoom(url) {
   } catch {}
 }
 
+// ---------- Video Downloader ----------
+async function detectVideos() {
+  const wv = activeWv();
+  if (!wv) return [];
+  const script = `
+    (function() {
+      const videos = [];
+      // video tags
+      document.querySelectorAll('video').forEach(v => {
+        if (v.src) videos.push({ url: v.src, type: 'video', title: v.title || document.title });
+        v.querySelectorAll('source').forEach(s => {
+          if (s.src) videos.push({ url: s.src, type: s.type || 'video', title: v.title || document.title });
+        });
+      });
+      // links to media files
+      document.querySelectorAll('a[href]').forEach(a => {
+        const href = a.href;
+        if (/\.(mp4|webm|mkv|avi|mov|flv|m3u8|mpd)(\?|$)/i.test(href)) {
+          videos.push({ url: href, type: 'link', title: a.textContent.trim() || href });
+        }
+      });
+      // dedupe
+      const seen = new Set();
+      return videos.filter(v => { if (seen.has(v.url)) return false; seen.add(v.url); return true; });
+    })();
+  `;
+  try {
+    const result = await wv.executeJavaScript(script);
+    return result || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function openVideoDownloader() {
+  const modal = document.getElementById('videodl-modal');
+  modal.classList.remove('hidden');
+  await refreshVideoList();
+}
+
+async function refreshVideoList() {
+  const list = document.getElementById('videodl-list');
+  list.innerHTML = '<div style="color:var(--fg2);font-size:12px;">Detectando vídeos...</div>';
+  const videos = await detectVideos();
+  if (videos.length === 0) {
+    list.innerHTML = '<div style="color:var(--fg2);font-size:12px;">Nenhum vídeo detectado na página.</div>';
+    return;
+  }
+  list.innerHTML = videos.map((v, i) => `
+    <div class="dl-item">
+      <div class="dl-name">${escapeHtml(v.title || 'Vídeo ' + (i+1))}</div>
+      <div class="dl-meta"><span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${escapeHtml(v.url)}</span></div>
+      <div class="dl-actions">
+        <button data-url="${escapeHtml(v.url)}" data-act="download">Baixar</button>
+        <button data-url="${escapeHtml(v.url)}" data-act="copy">Copiar URL</button>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      if (b.dataset.act === 'download') {
+        const wv = activeWv();
+        if (wv) wv.loadURL(b.dataset.url);
+        setStatus('Iniciando download: ' + b.dataset.url);
+        document.getElementById('videodl-modal').classList.add('hidden');
+      } else {
+        await navigator.clipboard.writeText(b.dataset.url);
+        setStatus('URL copiada');
+      }
+    };
+  });
+}
+
 async function init() {
   await applyTheme();
   await loadFavoritesHistory();
@@ -696,6 +768,10 @@ async function init() {
   $('#btn-incognito').onclick = () => toggleIncognito();
   $('#btn-vpn').onclick = () => togglePanel('vpn');
   $('#btn-downloads').onclick = () => togglePanel('downloads');
+  $('#btn-videodl').onclick = () => openVideoDownloader();
+  $('#videodl-close').onclick = () => document.getElementById('videodl-modal').classList.add('hidden');
+  $('#videodl-refresh').onclick = () => refreshVideoList();
+  document.getElementById('videodl-modal').addEventListener('click', (e) => { if (e.target.id === 'videodl-modal') e.target.classList.add('hidden'); });
   $('#btn-menu').onclick = () => togglePanel('settings');
   $('#btn-newtab').onclick = async () => createTab(await window.aki.store.get('general.home', 'https://duckduckgo.com'), state.incognito);
 
