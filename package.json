@@ -12,7 +12,7 @@
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux"
   },
-  "author": "nonatokaleu",
+  "author": "nonatovieira-tech <nonatovieira@unipam.edu.br>",
   "license": "MIT",
   "dependencies": {
     "electron-store": "^8.1.0",
@@ -60,7 +60,8 @@
       "target": [
         "AppImage",
         "deb"
-      ]
+      ],
+      "maintainer": "nonatovieira-tech <nonatovieira@unipam.edu.br>"
     },
     "afterPack": "scripts/afterPack.js"
   },
