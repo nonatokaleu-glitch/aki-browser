@@ -12,44 +12,61 @@ let vpnState = { connected: false, iface: null, ip: null };
 let downloads = new Map();
 
 // ---------- Adblock ----------
-function loadAdblockLists() {
-  const listsDir = path.join(__dirname, 'assets', 'filterlists');
-  adblockLists = [];
+let adblocker = null;
+
+async function setupAdblock(sess) {
   try {
-    if (!fs.existsSync(listsDir)) fs.mkdirSync(listsDir, { recursive: true });
-    const files = fs.readdirSync(listsDir).filter(f => f.endsWith('.txt'));
-    for (const f of files) {
-      const content = fs.readFileSync(path.join(listsDir, f), 'utf8');
-      const rules = content.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('!') && !l.startsWith('['));
-      adblockLists.push(...rules);
+    const { ElectronBlocker } = require('@cliqz/adblocker-electron');
+    if (!adblocker) {
+      const lists = [
+        'https://easylist.to/easylist/easylist.txt',
+        'https://easylist.to/easylist/easyprivacy.txt',
+      ];
+      adblocker = await ElectronBlocker.fromLists(fetch, lists, {
+        path: path.join(app.getPath('userData'), 'adblocker-engine.bin'),
+        read: async (p) => { try { return fs.readFileSync(p); } catch { return undefined; } },
+        write: async (p, data) => { fs.writeFileSync(p, data); },
+      });
     }
-  } catch (e) { console.error('adblock load error', e); }
-  // fallback minimal rules
-  if (adblockLists.length === 0) {
-    adblockLists = [
-      'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
-      'facebook.com/tr', 'analytics.google.com', 'googletagmanager.com'
-    ];
+    adblocker.enableBlockingInSession(sess);
+    console.log('Adblock (EasyList + EasyPrivacy) enabled');
+  } catch (e) {
+    console.error('Adblock init error:', e);
+    // fallback to simple host blocking
+    setupSimpleAdblock(sess);
   }
-  console.log('Adblock rules loaded:', adblockLists.length);
+}
+
+function setupSimpleAdblock(sess) {
+  const listsDir = path.join(__dirname, 'assets', 'filterlists');
+  let rules = [];
+  try {
+    if (fs.existsSync(listsDir)) {
+      const files = fs.readdirSync(listsDir).filter(f => f.endsWith('.txt'));
+      for (const f of files) {
+        const content = fs.readFileSync(path.join(listsDir, f), 'utf8');
+        rules.push(...content.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('!') && !l.startsWith('[')));
+      }
+    }
+  } catch (e) {}
+  if (rules.length === 0) {
+    rules = ['doubleclick.net','googlesyndication.com','googleadservices.com','googletagmanager.com','google-analytics.com','facebook.com/tr','outbrain.com','taboola.com','amazon-adsystem.com','adnxs.com','pubmatic.com','rubiconproject.com','criteo.com','quantserve.com','scorecardresearch.com','moatads.com','advertising.com','fastclick.net','popads.net','propellerads.com','revcontent.com','mgid.com','zemanta.com'];
+  }
+  sess.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, cb) => {
+    if (!store.get('privacy.adblock', true)) return cb({});
+    try {
+      const host = new URL(details.url).hostname;
+      const blocked = rules.some(rule => host.includes(rule) || details.url.includes(rule));
+      if (blocked) return cb({ cancel: true });
+    } catch {}
+    cb({});
+  });
+  console.log('Simple adblock rules loaded:', rules.length);
 }
 
 function isBlocked(url) {
-  try {
-    const host = new URL(url).hostname;
-    return adblockLists.some(rule => {
-      if (rule.includes('*')) return new RegExp(rule.replace(/\*/g, '.*')).test(url);
-      return host.includes(rule) || url.includes(rule);
-    });
-  } catch { return false; }
-}
-
-function setupAdblock(sess) {
-  sess.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, cb) => {
-    const blocked = store.get('privacy.adblock', true) && isBlocked(details.url);
-    if (blocked) return cb({ cancel: true });
-    cb({});
-  });
+  // kept for compatibility
+  return false;
 }
 
 // ---------- Fingerprinting protection (best-effort) ----------
@@ -265,13 +282,12 @@ function setupAutoUpdate() {
   } catch (e) { console.log('auto-update skip:', e.message); }
 }
 
-app.whenReady().then(() => {
-  loadAdblockLists();
-  setupAdblock(session.defaultSession);
+app.whenReady().then(async () => {
+  await setupAdblock(session.defaultSession);
   // Apply adblock to every session (including in-memory incognito)
-  app.on('session-created', (sess) => setupAdblock(sess));
+  app.on('session-created', (sess) => { setupAdblock(sess); });
   // persist:aki
-  setupAdblock(session.fromPartition('persist:aki'));
+  await setupAdblock(session.fromPartition('persist:aki'));
   createWindow();
   createTray();
   vpnAutoConnect();
